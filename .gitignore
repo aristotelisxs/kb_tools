@@ -1,0 +1,43 @@
+# Build
+dist/
+
+# IDE
+.idea
+.vscode
+
+
+# System
+.DS_Store
+
+# Local environment
+.env
+*.env
+conf/.local.secrets
+maintenance
+.venv
+.venv.bak
+
+# Build
+.build
+.install
+.install.*
+__pycache__
+
+# Python cache
+__pycache__/
+*.pyc
+
+var
+
+# still can force-push notebook if needed
+*.ipynb
+
+# macOS
+.DS_Store
+
+*.deepeval-cache.json
+temp_test_run_data.json
+notebooks/
+
+*.chainlit
+*.json

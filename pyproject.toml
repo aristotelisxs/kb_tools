@@ -1,0 +1,41 @@
+[tool.poetry]
+name = "kb-evaluation"
+version = "0.1.0"
+description = "Contains useful evaluation tools for your LLM project"
+authors = ["Aristotelis Charalampous <aristotelisxs@hotmail.com>"]
+readme = "README.md"
+packages = [{include = "tools", from = "src"}]
+
+[tool.poetry.scripts]
+tools = "cli:app"
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+langchain = "^0.3.8"
+langchain-aws = "^0.2.7"
+langchain-core = "^0.3.24"
+langchain-community = "^0.3.8"
+opensearch-py = "^2.7.1"
+pydantic = "2.10.1"
+pydantic-settings = "^2.6.1"
+scikit-learn = "^1.5.2"
+scipy = "^1.14.1"
+nltk = "^3.9.1"
+loguru = "^0.7.2"
+typer = "^0.13.1"
+boto3 = "^1.35.82"
+botocore = "^1.35.82"
+numpy = "^1.26.4"
+
+[tool.poetry.group.models]
+optional = true
+
+[tool.poetry.group.models.dependencies]
+sentence-transformers = "^3.3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
