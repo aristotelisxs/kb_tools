@@ -25,6 +25,52 @@ class OpenSearchConfig(BaseModel):
     index: str
 
 
+class BedrockModel(BaseModel):
+    bedrock_model_id: str = Field()
+    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
+    max_tokens: int | None = Field(default=None, gt=0)
+    top_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    top_k: int | None = Field(default=None, ge=0, le=500)
+    stop_sequences: list[str] | None = Field(default=None)
+
+    def get_model_kwargs(self) -> dict[str, Any]:
+        """Get model-specific kwargs with appropriate defaults."""
+        base_params = {
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "top_p": self.top_p,
+            "stop_sequences": self.stop_sequences or [],
+        }
+
+        if "anthropic" in self.bedrock_model_id.lower():
+            # see https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages.html
+            kwargs = {
+                "temperature": base_params["temperature"] or 1.0,
+                # 1024 is default on langchain_aws. we reproduce this default behaviour
+                "max_tokens": base_params["max_tokens"] or 1024,
+                "top_p": base_params["top_p"] or 1,
+                "stop_sequences": base_params["stop_sequences"],
+            }
+
+            if self.top_k:
+                kwargs["top_k"] = self.top_k
+
+            return kwargs
+        else:
+            raise ValueError(f"Unsupported model id: {self.bedrock_model_id}")
+
+
+class BedrockModelIds:
+    SONNET: str = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+    HAIKU: str = "anthropic.claude-3-haiku-20240307-v1:0"
+    
+
+class CorrectingConfig(BedrockModel):
+    bedrock_model_id: str = Field(default=BedrockModelIds.HAIKU)
+    temperature: float = Field(default=0.1)
+    max_tokens: int = Field(default=1024)
+
+
 class AWSConfig(BaseModel):
     access_key_id: str
     secret_access_key: SecretStr
@@ -50,12 +96,6 @@ class CommonPromptTagsConfig(BaseModel):
 
     system: str = Field(default="system")
     human: str = Field(default="human")
-
-
-class BedrockModelIds:
-    SONNET: str = "anthropic.claude-3-5-sonnet-20240620-v1:0"
-    HAIKU: str = "anthropic.claude-3-haiku-20240307-v1:0"
-    TITAN_EMBED: str = "amazon.titan-embed-text-v2:0"
 
 
 class KBCompletenessConfig(BaseModel):
@@ -88,12 +128,21 @@ class KBCompletenessConfig(BaseModel):
     completeness_score_threshold: float = Field(default=0.8)
 
 
+class PromptPreprocConfig(BaseModel):
+    correct_prompt: bool = False
+    correcting_prompt_name: str = Field(default="correcting")
+    do_spell_checking: bool = Field(default=False)
+    check_jaccard_similarity: bool = Field(default=True)
+
+
 class Config(BaseSettings):
     aws: AWSConfig
     opensearch: OpenSearchConfig
     retriever: RetrieverConfig = RetrieverConfig()
     kb_completeness: KBCompletenessConfig = KBCompletenessConfig()
     common_prompt_tags: CommonPromptTagsConfig = CommonPromptTagsConfig()
+    correcting_model: CorrectingConfig = CorrectingConfig()
+    prompt_preproc: PromptPreprocConfig = PromptPreprocConfig()
 
     model_config = SettingsConfigDict(
         env_file=DOTENV_PATH,

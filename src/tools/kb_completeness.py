@@ -28,6 +28,7 @@ from tools.utils import (
 )
 from tools.config import cfg
 from tools.log import logger
+from tools.prompt_correcter import Correcter
 from tools.retrieval import (
     VectorStoreRetrieverWithScores,
     get_documents_by_id,
@@ -108,6 +109,48 @@ def check_float_in_range(
     return None
 
 
+def invoke_correcter(question: str) -> str:
+    correcting_prompt = get_prompt(
+        cfg.prompt_preproc.correcting_prompt_name, return_str=True
+    )
+
+    chat_prompt = ChatPromptTemplate(
+        [
+            (
+                cfg.common_prompt_tags.system,
+                correcting_prompt,
+            ),
+            (cfg.common_prompt_tags.human, "{input}"),
+        ]
+    )
+
+    correcter = Correcter(
+        client=get_bedrock_client(),
+        model_id=cfg.bedrock.correcting_model.bedrock_model_id,
+        max_tokens=cfg.bedrock.correcting_model.max_tokens,
+        temperature=cfg.bedrock.correcting_model.temperature,
+        model_kwargs=cfg.bedrock.correcting_model.get_model_kwargs(),
+    )
+
+    chain = (chat_prompt | correcter)
+
+    reply = chain.invoke(
+        {"input": question}
+    )
+
+    pattern = r"<text>(.*?)</text>"
+
+    # Extract all matches
+    matches = re.findall(pattern, reply, re.DOTALL)
+
+    if len(matches) == 1:
+        # Return the first match. There should only be one
+        return matches[0]
+    else:
+        # Otherwise, return the original question
+        return question
+        
+
 class KBEvaluator:
     def __init__(
         self,
@@ -176,6 +219,7 @@ class KBEvaluator:
         )
 
         self._embed_model = cfg.kb_completeness.query_embed_model
+        self.correct_prompt = cfg.prompt_preproc.correct_prompt
 
         # Load model for embedding
         if "amazon.titan-embed" in self._embed_model:
@@ -198,7 +242,7 @@ class KBEvaluator:
             logger.warning(
                 f"Failed to generate embedding for text: {text[:30]}... Error: {str(e)}"
             )
-            return None
+            return None    
 
     def llm_document_analysis(
         self,
@@ -684,6 +728,7 @@ def kb_eval(
     answer_key: str = "expected_output",
     id_key: str = "ticket_id",
     items_key: str = "items",
+    correct_prompt: bool = False,
 ):
     """Evalutes how complete is our KB given sets of Q&A pairs stored in file.
 
@@ -712,9 +757,15 @@ def kb_eval(
     for pair in dataset[items_key]:
         kb_evaluator = KBEvaluator()  # Reset evaluator object for each Q&A pair
         logger.info(f"""Analyzing the pair with id: {pair[id_key]}""")
+
+        question = pair[question_key]
+
+        if cfg.prompt_preproc.correct_prompt:
+            question = invoke_correcter(question)
+
         try:
             mappings[pair[id_key]] = kb_evaluator.evaluate_w_question(
-                question=pair[question_key], agent_answer=pair[answer_key]
+                question=question, agent_answer=pair[answer_key]
             )
         except botocore.exceptions.ClientError:
             attempts += 1
